@@ -1,0 +1,656 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: Resume OS API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: anthropic
+    description: Anthropic AI chat operations
+  - name: resumes
+    description: Resume management operations
+  - name: ai
+    description: AI-powered resume operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /anthropic/conversations:
+    get:
+      operationId: listAnthropicConversations
+      tags: [anthropic]
+      summary: List all conversations
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AnthropicConversation"
+    post:
+      operationId: createAnthropicConversation
+      tags: [anthropic]
+      summary: Create a new conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAnthropicConversationBody"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnthropicConversation"
+  /anthropic/conversations/{id}:
+    get:
+      operationId: getAnthropicConversation
+      tags: [anthropic]
+      summary: Get conversation with messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnthropicConversationWithMessages"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnthropicError"
+    delete:
+      operationId: deleteAnthropicConversation
+      tags: [anthropic]
+      summary: Delete a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnthropicError"
+  /anthropic/conversations/{id}/messages:
+    get:
+      operationId: listAnthropicMessages
+      tags: [anthropic]
+      summary: List messages in a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AnthropicMessage"
+    post:
+      operationId: sendAnthropicMessage
+      tags: [anthropic]
+      summary: Send a message and receive an AI response (SSE stream)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendAnthropicMessageBody"
+      responses:
+        "200":
+          description: SSE stream of assistant response chunks
+          content:
+            text/event-stream: {}
+
+  /resumes:
+    get:
+      operationId: listResumes
+      tags: [resumes]
+      summary: List all resumes
+      responses:
+        "200":
+          description: List of resumes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Resume"
+    post:
+      operationId: createResume
+      tags: [resumes]
+      summary: Create a new resume
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateResumeBody"
+      responses:
+        "201":
+          description: Created resume
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resume"
+  /resumes/{id}:
+    get:
+      operationId: getResume
+      tags: [resumes]
+      summary: Get a resume by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Resume
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resume"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateResume
+      tags: [resumes]
+      summary: Update a resume
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateResumeBody"
+      responses:
+        "200":
+          description: Updated resume
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Resume"
+    delete:
+      operationId: deleteResume
+      tags: [resumes]
+      summary: Delete a resume
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /ai/improve-section:
+    post:
+      operationId: improveSection
+      tags: [ai]
+      summary: AI-improve a resume section (SSE stream)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImproveSectionBody"
+      responses:
+        "200":
+          description: SSE stream of AI improvements
+          content:
+            text/event-stream: {}
+
+  /ai/ats-score:
+    post:
+      operationId: getAtsScore
+      tags: [ai]
+      summary: Get ATS score for a resume
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtsScoreBody"
+      responses:
+        "200":
+          description: ATS score result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtsScoreResult"
+
+  /ai/job-targeting:
+    post:
+      operationId: targetJob
+      tags: [ai]
+      summary: Analyze resume against job description and suggest improvements (SSE stream)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobTargetingBody"
+      responses:
+        "200":
+          description: SSE stream of job targeting suggestions
+          content:
+            text/event-stream: {}
+
+  /ai/chat:
+    post:
+      operationId: resumeChat
+      tags: [ai]
+      summary: Global AI chat about the resume (SSE stream)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResumeChatBody"
+      responses:
+        "200":
+          description: SSE stream of AI chat response
+          content:
+            text/event-stream: {}
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    AnthropicConversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - createdAt
+    AnthropicMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        role:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - conversationId
+        - role
+        - content
+        - createdAt
+    CreateAnthropicConversationBody:
+      type: object
+      properties:
+        title:
+          type: string
+      required:
+        - title
+    SendAnthropicMessageBody:
+      type: object
+      properties:
+        content:
+          type: string
+      required:
+        - content
+    AnthropicConversationWithMessages:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnthropicMessage"
+      required:
+        - id
+        - title
+        - createdAt
+        - messages
+    AnthropicError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Resume:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        template:
+          type: string
+        profile:
+          type: object
+          additionalProperties: true
+        experience:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        education:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        skills:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        projects:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        certifications:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        atsScore:
+          type: integer
+          nullable: true
+        targetRole:
+          type: string
+          nullable: true
+        targetIndustry:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - template
+        - profile
+        - experience
+        - education
+        - skills
+        - projects
+        - certifications
+        - createdAt
+        - updatedAt
+    CreateResumeBody:
+      type: object
+      properties:
+        title:
+          type: string
+        template:
+          type: string
+      required:
+        - title
+    UpdateResumeBody:
+      type: object
+      properties:
+        title:
+          type: string
+        template:
+          type: string
+        profile:
+          type: object
+          additionalProperties: true
+        experience:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        education:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        skills:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        projects:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        certifications:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        targetRole:
+          type: string
+        targetIndustry:
+          type: string
+
+    ImproveSectionBody:
+      type: object
+      properties:
+        resumeId:
+          type: integer
+        section:
+          type: string
+          description: Section name (profile, experience, education, skills, projects)
+        content:
+          type: object
+          additionalProperties: true
+          description: Current section content
+        targetRole:
+          type: string
+          nullable: true
+        targetIndustry:
+          type: string
+          nullable: true
+        yearsOfExperience:
+          type: integer
+          nullable: true
+        companyType:
+          type: string
+          nullable: true
+          description: startup, corporate, faang, consulting
+        tone:
+          type: string
+          nullable: true
+          description: concise, detailed, technical, business
+        metrics:
+          type: string
+          nullable: true
+          description: Specific metrics/achievements to include
+        previousVersion:
+          type: object
+          additionalProperties: true
+          nullable: true
+      required:
+        - section
+        - content
+
+    AtsScoreBody:
+      type: object
+      properties:
+        resumeId:
+          type: integer
+        jobDescription:
+          type: string
+          nullable: true
+        resumeContent:
+          type: object
+          additionalProperties: true
+      required:
+        - resumeContent
+
+    AtsScoreResult:
+      type: object
+      properties:
+        totalScore:
+          type: integer
+        breakdown:
+          type: object
+          properties:
+            keywords:
+              type: integer
+            structure:
+              type: integer
+            contentStrength:
+              type: integer
+            readability:
+              type: integer
+            measurableAchievements:
+              type: integer
+          required:
+            - keywords
+            - structure
+            - contentStrength
+            - readability
+            - measurableAchievements
+        missingKeywords:
+          type: array
+          items:
+            type: string
+        suggestions:
+          type: array
+          items:
+            type: string
+        sectionScores:
+          type: object
+          additionalProperties:
+            type: integer
+      required:
+        - totalScore
+        - breakdown
+        - missingKeywords
+        - suggestions
+        - sectionScores
+
+    JobTargetingBody:
+      type: object
+      properties:
+        resumeId:
+          type: integer
+          nullable: true
+        resumeContent:
+          type: object
+          additionalProperties: true
+        jobDescription:
+          type: string
+        confirmOptimize:
+          type: boolean
+      required:
+        - resumeContent
+        - jobDescription
+
+    ResumeChatBody:
+      type: object
+      properties:
+        resumeId:
+          type: integer
+          nullable: true
+        resumeContent:
+          type: object
+          additionalProperties: true
+          nullable: true
+        message:
+          type: string
+        conversationHistory:
+          type: array
+          items:
+            type: object
+            properties:
+              role:
+                type: string
+              content:
+                type: string
+            required:
+              - role
+              - content
+      required:
+        - message
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error

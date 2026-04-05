@@ -1,0 +1,17 @@
+packages:
+  "framer-motion": "For smooth layout animations and panel transitions"
+  "date-fns": "For human-readable dates"
+  "clsx": "For class name merging"
+  "tailwind-merge": "For tailwind class deduplication"
+
+images:
+  - path: "artifacts/resume-os/public/images/dashboard-hero.png"
+    description: "Abstract, sleek, dark-mode 3D geometric waves representing career growth and AI data flow, deep blues and cyan accents"
+    aspect_ratio: "16:9"
+  - path: "artifacts/resume-os/public/images/empty-state.png"
+    description: "Minimalist glowing folder icon in a dark void with subtle floating particles, futuristic ui style"
+    aspect_ratio: "1:1"
+
+notes:
+  - "Assuming @workspace/api-client-react exports the generated hooks and types directly from its index."
+  - "Using custom fetch for SSE endpoints as requested, bypassing Orval for those specific routes."

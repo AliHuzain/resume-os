@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Resume OS"
+version = "1.0.0"
+id = "artifacts/resume-os"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20979
+
+[services.development]
+run = "pnpm --filter @workspace/resume-os run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/resume-os", "run", "build" ]
+publicDir = "artifacts/resume-os/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20979"
+BASE_PATH = "/"
