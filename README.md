@@ -16,15 +16,15 @@ AI-powered Resume Enhancement System
   - Real parsing with structural understanding (not just text extraction)
 
 - ATS Optimization
-  -Real-time scoring based on ATS heuristics
-  -Keyword alignment for specific job descriptions
+  - Real-time scoring based on ATS heuristics
+  - Keyword alignment for specific job descriptions
 
 - Multi-Agent Analysis
-  -Parallel evaluation across 5 specialized AI models
-  -Aggregated insights for improved accuracy
+  - Parallel evaluation across 5 specialized AI models
+  - Aggregated insights for improved accuracy
 
 - Resume Builder
-  -20 professional templates with color editor
-  -Clean PDF export
+  - 20 professional templates with color editor
+  - Clean PDF export
 
 Note: This is a True multi-model AI ensemble (not single-model output)
