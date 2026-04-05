@@ -4,12 +4,12 @@ AI-powered Resume Enhancement System
 
 6-Agent Multi-AI System
 
-- 1.PDF Intelligence: Advanced document parser for PDF/DOCX (structure extraction, sections, formatting)
-- 2.Anthropic Claude: Deep linguistic and clarity analysis
-- 3.Google Gemini: Contextual understanding and semantic improvements
-- 4.xAI Grok: Technical and logical consistency validation
-- 5.Perplexity AI Perplexity: Market alignment and role-specific optimization
-- 6.OpenAI GPT-4o (Decision Engine): Final synthesis, scoring, and output generation
+- .PDF Intelligence: Advanced document parser for PDF/DOCX (structure extraction, sections, formatting)
+- .Anthropic Claude: Deep linguistic and clarity analysis
+- .Google Gemini: Contextual understanding and semantic improvements
+- .xAI Grok: Technical and logical consistency validation
+- .Perplexity AI Perplexity: Market alignment and role-specific optimization
+- .OpenAI GPT-4o (Decision Engine): Final synthesis, scoring, and output generation
 
 # Features
 PDF/DOCX Upload
