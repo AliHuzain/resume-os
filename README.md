@@ -1,4 +1,4 @@
-# ResumeOS
+# Resumate
 
 AI-powered Resume Enhancement System
 
