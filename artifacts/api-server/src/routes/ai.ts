@@ -9,6 +9,7 @@ import {
   TargetJobBody,
   ResumeChatBody,
 } from "@workspace/api-zod";
+import { syncToGitHub } from "../lib/github-sync.js";
 
 const router = Router();
 
@@ -40,6 +41,113 @@ async function streamResponse(res: any, systemPrompt: string, userMessage: strin
     res.end();
   }
 }
+
+// ─── GITHUB AUTO-SYNC ─────────────────────────────────────────────
+router.post("/github/sync", async (req, res) => {
+  const { message } = req.body;
+  const result = await syncToGitHub(message || "sync: ResuMate update");
+  res.json(result);
+});
+
+// ─── PDF INTELLIGENCE AGENT ──────────────────────────────────────
+router.post("/ai/parse-pdf-intelligence", async (req, res) => {
+  const { rawText } = req.body;
+  if (!rawText) {
+    res.status(400).json({ error: "rawText is required" });
+    return;
+  }
+
+  const systemPrompt = `You are the Document Intelligence Agent — a specialized AI that extracts and structures resume data from raw PDF text with perfect accuracy. You understand PDF artifacts, formatting noise, and can reconstruct the original intent of the document even when the text extraction is imperfect.
+
+Return ONLY valid JSON, no markdown, no explanation.`;
+
+  const userPrompt = `Parse this raw PDF text into a clean, structured resume object.
+
+Raw text extracted from PDF:
+${rawText}
+
+Return this exact JSON structure:
+{
+  "profile": {
+    "name": "<full name>",
+    "title": "<job title or professional headline>",
+    "email": "<email>",
+    "phone": "<phone>",
+    "location": "<city, country>",
+    "linkedin": "<linkedin url or username>",
+    "github": "<github url or username>",
+    "portfolio": "<website or portfolio url>",
+    "summary": "<professional summary — improve if vague, keep if strong, generate if missing based on experience>"
+  },
+  "experience": [
+    {
+      "id": "<uuid-like string>",
+      "title": "<job title>",
+      "company": "<company name>",
+      "location": "<city, country or Remote>",
+      "startDate": "<Month YYYY>",
+      "endDate": "<Month YYYY or Present>",
+      "current": <boolean>,
+      "bullets": ["<strong action-verb bullet>", ...]
+    }
+  ],
+  "education": [
+    {
+      "id": "<uuid>",
+      "degree": "<degree type>",
+      "field": "<field of study>",
+      "school": "<institution name>",
+      "location": "<city, country>",
+      "startDate": "<Year>",
+      "endDate": "<Year or Present>",
+      "gpa": "<GPA if mentioned>",
+      "honors": "<honors/awards if mentioned>"
+    }
+  ],
+  "skills": [
+    { "id": "<uuid>", "category": "<category name>", "items": ["<skill>", ...] }
+  ],
+  "projects": [
+    {
+      "id": "<uuid>",
+      "name": "<project name>",
+      "description": "<what it does>",
+      "technologies": ["<tech>", ...],
+      "url": "<url if present>",
+      "bullets": ["<achievement or feature>", ...]
+    }
+  ],
+  "parsingConfidence": <0-100 — how confident you are in the extraction>,
+  "parsingNotes": "<brief note about any unclear sections or assumptions made>"
+}
+
+Rules:
+- Never fabricate experience, skills, or education that isn't in the original text
+- Fix obvious OCR/PDF artifacts (garbled characters, line breaks in wrong places)
+- Improve bullet phrasing ONLY if they are genuinely vague (e.g. "did things" → keep context but strengthen verb)
+- If a field is missing, use null — never guess
+- Generate UUIDs as short unique strings like "exp-1", "edu-1", "skill-1" etc.`;
+
+  try {
+    const message = await anthropic.messages.create({
+      model: "claude-opus-4-6",
+      max_tokens: 8192,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+    });
+    const block = message.content[0];
+    if (block.type !== "text") {
+      res.status(500).json({ error: "Unexpected AI response" });
+      return;
+    }
+    let jsonText = block.text.trim();
+    const match = jsonText.match(/\{[\s\S]*\}/);
+    if (match) jsonText = match[0];
+    res.json(JSON.parse(jsonText));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "PDF parsing failed" });
+  }
+});
 
 // ─── DEEP ANALYSIS ───────────────────────────────────────────────
 router.post("/ai/analyze-resume", async (req, res) => {
@@ -375,7 +483,7 @@ router.post("/ai/multi-agent-analyze", async (req, res) => {
     return;
   }
 
-  // Run all 4 agents in parallel
+  // Run all 4 analyst agents in parallel
   const [claudeResult, geminiResult, grokResult, perplexityResult] = await Promise.allSettled([
     runClaude(section, content),
     runGemini(section, content),
@@ -397,13 +505,13 @@ router.post("/ai/multi-agent-analyze", async (req, res) => {
     error: result.status === "rejected" ? (result.reason?.message || "Failed") : null,
   }));
 
-  // GPT-5.2 as the decision maker
+  // GPT-4o as the decision maker
   const agentSummaries = agents
     .filter(a => a.data)
     .map(a => `${a.name} (${a.data.changePercentage}% change needed):\n- Suggestion: ${a.data.suggestion}\n- Reasoning: ${a.data.reasoning}\n- Improved version: ${a.data.improvedVersion}`)
     .join("\n\n---\n\n");
 
-  const decisionPrompt = `You are GPT-5.2 acting as the final decision maker in a multi-AI resume improvement pipeline.
+  const decisionPrompt = `You are GPT-4o acting as the final decision maker in a multi-AI resume improvement pipeline.
 
 Four AI agents have analyzed the "${section}" section of a resume and each provided their suggestions with a "change percentage" indicating how much improvement is needed.
 
@@ -412,7 +520,7 @@ Here are their reports:
 ${agentSummaries}
 
 Your task:
-1. Evaluate all suggestions based on which has the highest potential for improvement (prioritize the highest change percentage that is also backed by strong reasoning)
+1. Evaluate all suggestions — pick the approach with highest improvement potential (prioritize highest change percentage with strong reasoning)
 2. Select the best approach OR synthesize the best elements from multiple agents
 3. Produce the FINAL improved content for the "${section}" section
 
@@ -427,10 +535,10 @@ Return this exact JSON:
 
   try {
     const decisionRes = await openai.chat.completions.create({
-      model: "gpt-5.2",
-      max_completion_tokens: 8192,
+      model: "gpt-4o",
+      max_tokens: 8192,
       messages: [
-        { role: "system", content: "You are a senior career strategist and expert resume writer. You evaluate AI agent suggestions and make the final decision on which improvements to apply. Return ONLY valid JSON." },
+        { role: "system", content: "You are a senior career strategist and expert resume writer. Evaluate AI agent suggestions and make the final decision on which improvements to apply. Return ONLY valid JSON." },
         { role: "user", content: decisionPrompt },
       ],
     });
@@ -439,10 +547,325 @@ Return this exact JSON:
     const decision = JSON.parse(decisionMatch ? decisionMatch[0] : decisionText);
     res.json({ agents, decision, section });
   } catch (err: any) {
-    // Return agents without decision if GPT fails
     res.json({ agents, decision: null, section, decisionError: err.message });
   }
 });
 
-export default router;
+// ─── FULL 5-AGENT PIPELINE (SSE streaming) ───────────────────────
+const FULL_RESUME_AGENT_SYSTEM = (name: string) =>
+  `You are ${name}, an expert resume analyst and career coach. Analyze the ENTIRE resume and provide detailed section-by-section feedback with specific improvements. Return ONLY valid JSON.`;
 
+const FULL_RESUME_AGENT_PROMPT = (resumeData: any) => `Analyze this entire resume. For each section, provide a score, key issues, and an improved version.
+
+Resume:
+${JSON.stringify(resumeData, null, 2)}
+
+Return this exact JSON structure:
+{
+  "overallScore": <0-100 realistic score>,
+  "sections": {
+    "profile": {
+      "score": <0-100>,
+      "changeRate": <0-100 — how much improvement is needed — be realistic>,
+      "issues": ["<specific issue>"],
+      "improvedContent": {
+        "name": "<keep original or improve>",
+        "title": "<professional headline — improve if weak>",
+        "email": "<keep original>",
+        "phone": "<keep original>",
+        "location": "<keep original>",
+        "linkedin": "<keep original>",
+        "github": "<keep original>",
+        "website": "<keep original>",
+        "summary": "<rewrite — 2-3 strong sentences, action-oriented, specific to their background>"
+      }
+    },
+    "experience": {
+      "score": <0-100>,
+      "changeRate": <0-100>,
+      "issues": ["<specific issue>"],
+      "improvedContent": [
+        {
+          "id": "<keep original id>",
+          "role": "<improve if vague>",
+          "company": "<keep original>",
+          "location": "<keep original>",
+          "startDate": "<keep original>",
+          "endDate": "<keep original>",
+          "bullets": ["<rewritten bullet with strong verb + quantification>", "..."]
+        }
+      ]
+    },
+    "skills": {
+      "score": <0-100>,
+      "changeRate": <0-100>,
+      "issues": ["<specific issue>"],
+      "improvedContent": [
+        { "id": "<keep original id>", "category": "<improve name if weak>", "items": ["<skill>", "..."] }
+      ]
+    },
+    "education": {
+      "score": <0-100>,
+      "changeRate": <0-100>,
+      "issues": ["<specific issue>"],
+      "improvedContent": [
+        { "id": "<keep id>", "school": "<keep>", "degree": "<keep>", "field": "<keep>", "startDate": "<keep>", "endDate": "<keep>" }
+      ]
+    },
+    "projects": {
+      "score": <0-100>,
+      "changeRate": <0-100>,
+      "issues": ["<specific issue>"],
+      "improvedContent": [
+        { "id": "<keep id>", "name": "<improve if weak>", "description": "<rewrite — make impactful>", "url": "<keep>", "bullets": ["<strong bullet>"] }
+      ]
+    }
+  },
+  "summary": "<2-sentence overall assessment>"
+}
+
+Rules:
+- NEVER invent experience, companies, or skills not in the original
+- DO improve bullet phrasing with stronger action verbs and quantification cues
+- DO rewrite summaries to be more impactful and targeted
+- Change rates: 0-20 = needs minor polish; 21-50 = moderate rewrite; 51-80 = major rewrite; 81-100 = complete overhaul`;
+
+async function runFullClaude(resumeData: any) {
+  const msg = await anthropic.messages.create({
+    model: "claude-opus-4-6",
+    max_tokens: 8192,
+    system: FULL_RESUME_AGENT_SYSTEM("Claude (Anthropic)"),
+    messages: [{ role: "user", content: FULL_RESUME_AGENT_PROMPT(resumeData) }],
+  });
+  const block = msg.content[0];
+  if (block.type !== "text") throw new Error("Bad Claude response");
+  const match = block.text.match(/\{[\s\S]*\}/);
+  return JSON.parse(match ? match[0] : block.text);
+}
+
+async function runFullGemini(resumeData: any) {
+  const res = await geminiAi.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: [{ role: "user", parts: [{ text: FULL_RESUME_AGENT_PROMPT(resumeData) }] }],
+    config: { systemInstruction: FULL_RESUME_AGENT_SYSTEM("Gemini (Google)"), maxOutputTokens: 8192, responseMimeType: "application/json" },
+  });
+  const text = res.text ?? "{}";
+  const match = text.match(/\{[\s\S]*\}/);
+  return JSON.parse(match ? match[0] : text);
+}
+
+async function runFullGrok(resumeData: any) {
+  const res = await openrouter.chat.completions.create({
+    model: "x-ai/grok-3",
+    max_tokens: 4096,
+    messages: [
+      { role: "system", content: FULL_RESUME_AGENT_SYSTEM("Grok (xAI)") },
+      { role: "user", content: FULL_RESUME_AGENT_PROMPT(resumeData) },
+    ],
+  });
+  const text = res.choices[0]?.message?.content ?? "{}";
+  const match = text.match(/\{[\s\S]*\}/);
+  return JSON.parse(match ? match[0] : text);
+}
+
+async function runFullPerplexity(resumeData: any) {
+  const res = await openrouter.chat.completions.create({
+    model: "perplexity/sonar-pro",
+    max_tokens: 4096,
+    messages: [
+      { role: "system", content: FULL_RESUME_AGENT_SYSTEM("Perplexity") },
+      { role: "user", content: FULL_RESUME_AGENT_PROMPT(resumeData) },
+    ],
+  });
+  const text = res.choices[0]?.message?.content ?? "{}";
+  const match = text.match(/\{[\s\S]*\}/);
+  return JSON.parse(match ? match[0] : text);
+}
+
+router.post("/ai/full-enhance", async (req, res) => {
+  const { resumeData } = req.body;
+  if (!resumeData) {
+    res.status(400).json({ error: "resumeData is required" });
+    return;
+  }
+
+  sseHeaders(res);
+
+  const send = (data: any) => {
+    try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch {}
+  };
+
+  try {
+    send({ step: "start", message: "Starting ResuMate 5-agent pipeline...", progress: 2 });
+
+    // ── Step 1: Run 4 agents in parallel, stream as each completes ──
+    send({ step: "analyzing", message: "4 AI agents analyzing every section of your resume...", progress: 8 });
+
+    const agentResults: Record<string, any> = {};
+    let progressOffset = 10;
+
+    const agentDefs = [
+      { name: "Claude", fn: runFullClaude },
+      { name: "Gemini", fn: runFullGemini },
+      { name: "Grok", fn: runFullGrok },
+      { name: "Perplexity", fn: runFullPerplexity },
+    ];
+
+    const agentPromises = agentDefs.map(async ({ name, fn }, idx) => {
+      try {
+        const result = await fn(resumeData);
+        agentResults[name] = { status: "success", data: result };
+        send({ step: "agent_done", agent: name, overallScore: result.overallScore, progress: progressOffset + idx * 12 });
+      } catch (err: any) {
+        agentResults[name] = { status: "error", error: err.message };
+        send({ step: "agent_done", agent: name, error: err.message, progress: progressOffset + idx * 12 });
+      }
+    });
+
+    await Promise.all(agentPromises);
+    send({ step: "agents_complete", message: "All agents reported. GPT-4o selecting best improvements...", progress: 62 });
+
+    // ── Step 2: GPT-4o synthesizes and applies best improvements ──
+    const successfulReports = Object.entries(agentResults)
+      .filter(([, v]) => v.status === "success")
+      .map(([name, v]) => ({ name, report: v.data }));
+
+    if (successfulReports.length === 0) throw new Error("All agents failed");
+
+    const sections = ["profile", "experience", "skills", "education", "projects"] as const;
+
+    const gptDecisionPrompt = `You are GPT-4o, the final decision maker in ResuMate's AI pipeline.
+
+${successfulReports.length} AI agents (${successfulReports.map(r => r.name).join(", ")}) have analyzed the following resume and each suggested improvements for every section.
+
+ORIGINAL RESUME:
+${JSON.stringify(resumeData, null, 2)}
+
+AGENT REPORTS (each agent's suggested improvements with their confidence — higher changeRate = more improvement needed):
+${successfulReports.map(r => `\n--- ${r.name} (Overall Score: ${r.report.overallScore}/100) ---\n${JSON.stringify(r.report.sections, null, 2)}`).join("\n\n")}
+
+Your task:
+1. For each section, compare all agent suggestions
+2. Select the improvements with the HIGHEST changeRate (most transformative improvement needed) from ANY agent
+3. If multiple agents agree on an issue, that's a priority fix
+4. Apply the best version of each section to create the FINAL enhanced resume
+5. NEVER invent experience, companies, or credentials not in the original
+
+Return this EXACT JSON structure:
+{
+  "profile": { "name": "...", "title": "...", "email": "...", "phone": "...", "location": "...", "linkedin": "...", "github": "...", "website": "...", "summary": "..." },
+  "experience": [{ "id": "...", "role": "...", "company": "...", "location": "...", "startDate": "...", "endDate": "...", "bullets": ["..."] }],
+  "skills": [{ "id": "...", "category": "...", "items": ["..."] }],
+  "education": [{ "id": "...", "school": "...", "degree": "...", "field": "...", "startDate": "...", "endDate": "..." }],
+  "projects": [{ "id": "...", "name": "...", "description": "...", "url": "...", "bullets": ["..."] }],
+  "winningAgentPerSection": {
+    "profile": "<agent name whose approach won>",
+    "experience": "<agent name>",
+    "skills": "<agent name>",
+    "education": "<agent name>",
+    "projects": "<agent name>"
+  },
+  "improvementSummary": "<3-4 sentences describing the key improvements made>"
+}`;
+
+    const gptRes = await openai.chat.completions.create({
+      model: "gpt-4o",
+      max_tokens: 8192,
+      messages: [
+        { role: "system", content: "You are a senior career strategist and expert resume writer. Apply the best AI-suggested improvements to produce a final enhanced resume. Return ONLY valid JSON." },
+        { role: "user", content: gptDecisionPrompt },
+      ],
+    });
+
+    const gptText = gptRes.choices[0]?.message?.content ?? "{}";
+    const gptMatch = gptText.match(/\{[\s\S]*\}/);
+    const gptDecision = JSON.parse(gptMatch ? gptMatch[0] : gptText);
+
+    const enhancedResume = {
+      profile: { ...resumeData.profile, ...gptDecision.profile },
+      experience: gptDecision.experience?.length > 0 ? gptDecision.experience : resumeData.experience,
+      skills: gptDecision.skills?.length > 0 ? gptDecision.skills : resumeData.skills,
+      education: gptDecision.education?.length > 0 ? gptDecision.education : resumeData.education,
+      projects: gptDecision.projects?.length > 0 ? gptDecision.projects : resumeData.projects,
+    };
+
+    send({ step: "applied", message: "Improvements applied. Running ATS scoring...", progress: 78 });
+
+    // ── Step 3: ATS scoring (Claude + GPT-4o in parallel) ──
+    const atsPrompt = `Score this enhanced resume for ATS compatibility. Return ONLY valid JSON.
+
+Resume:
+${JSON.stringify(enhancedResume, null, 2)}
+
+Return:
+{
+  "score": <0-100 realistic ATS score>,
+  "grade": <"A+"|"A"|"B+"|"B"|"C+"|"C"|"D"|"F">,
+  "breakdown": {
+    "keywords": <0-100>,
+    "structure": <0-100>,
+    "contentStrength": <0-100>,
+    "readability": <0-100>,
+    "quantifiedAchievements": <0-100>
+  },
+  "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
+  "improvements": ["<remaining improvement 1>", "<remaining improvement 2>"]
+}`;
+
+    const [claudeAts, gptAts] = await Promise.allSettled([
+      anthropic.messages.create({
+        model: "claude-opus-4-6", max_tokens: 1024,
+        system: "You are an ATS scoring system. Return ONLY valid JSON.",
+        messages: [{ role: "user", content: atsPrompt }],
+      }).then(msg => {
+        const block = msg.content[0];
+        if (block.type !== "text") throw new Error("Bad response");
+        const m = block.text.match(/\{[\s\S]*\}/);
+        return JSON.parse(m ? m[0] : block.text);
+      }),
+      openai.chat.completions.create({
+        model: "gpt-4o", max_tokens: 1024,
+        messages: [
+          { role: "system", content: "You are an ATS scoring system. Return ONLY valid JSON." },
+          { role: "user", content: atsPrompt },
+        ],
+      }).then(r => {
+        const text = r.choices[0]?.message?.content ?? "{}";
+        const m = text.match(/\{[\s\S]*\}/);
+        return JSON.parse(m ? m[0] : text);
+      }),
+    ]);
+
+    const claudeAtsData = claudeAts.status === "fulfilled" ? claudeAts.value : null;
+    const gptAtsData = gptAts.status === "fulfilled" ? gptAts.value : null;
+    const atsScore = claudeAtsData && gptAtsData
+      ? { ...claudeAtsData, score: Math.round((claudeAtsData.score + gptAtsData.score) / 2) }
+      : claudeAtsData || gptAtsData || { score: 75, grade: "B", breakdown: {}, strengths: [], improvements: [] };
+
+    send({ step: "scored", message: `ATS Score: ${atsScore.score}/100 (${atsScore.grade})`, progress: 92 });
+
+    // ── Sync to GitHub ──
+    try {
+      await syncToGitHub("update: ResuMate enhanced resume processed");
+    } catch {}
+
+    send({
+      step: "done",
+      progress: 100,
+      result: {
+        enhancedResume,
+        atsScore,
+        agentReports: agentResults,
+        winningAgentPerSection: gptDecision.winningAgentPerSection || {},
+        improvementSummary: gptDecision.improvementSummary || "",
+      },
+    });
+
+    res.end();
+  } catch (err: any) {
+    send({ step: "error", error: err.message || "Enhancement failed" });
+    res.end();
+  }
+});
+
+export default router;

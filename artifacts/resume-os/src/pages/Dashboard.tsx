@@ -97,10 +97,10 @@ export default function Dashboard() {
             <div className="w-12 h-12 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center">
               <Sparkles className="w-6 h-6 text-primary" />
             </div>
-            <h1 className="text-4xl font-bold text-white tracking-tight">Resume<span className="text-primary">OS</span></h1>
+            <h1 className="text-4xl font-bold text-white tracking-tight">Resu<span className="text-primary">Mate</span></h1>
           </div>
           <p className="text-xl text-muted-foreground max-w-lg mx-auto leading-relaxed">
-            Upload your resume. Claude AI analyzes it, asks targeted questions, then enhances it section by section.
+            Upload your resume. 5 AI agents analyze every section, GPT-4o applies the best improvements — completely free.
           </p>
         </div>
 
@@ -152,7 +152,7 @@ export default function Dashboard() {
                 <Upload className="w-8 h-8 text-muted-foreground" />
               </div>
               <h2 className="text-2xl font-bold text-white mb-2">Upload your resume</h2>
-              <p className="text-muted-foreground mb-6 text-sm">PDF or DOCX · Up to 10MB · Claude AI extracts everything instantly</p>
+              <p className="text-muted-foreground mb-6 text-sm">PDF or DOCX · Up to 10MB · Document Intelligence extracts everything instantly</p>
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 px-8 py-5 text-base rounded-xl">
                 <Upload className="w-5 h-5" /> Choose File
               </Button>
@@ -170,9 +170,9 @@ export default function Dashboard() {
         {!isLoading && (!resumes || resumes.length === 0) && (
           <div className="grid grid-cols-3 gap-6 mb-12">
             {[
-              { step: "01", title: "Upload", desc: "Upload your current PDF or DOCX resume. Claude extracts every section." },
-              { step: "02", title: "AI Analysis", desc: "Claude Opus analyzes weaknesses: missing metrics, weak verbs, ATS gaps." },
-              { step: "03", title: "Smart Enhancement", desc: "AI asks targeted questions, then rewrites each section. You review & accept." },
+              { step: "01", title: "Upload", desc: "Upload your PDF or DOCX resume. Document Intelligence parses and structures every section instantly." },
+              { step: "02", title: "5 AI Agents Analyze", desc: "Claude, Gemini, Grok, and Perplexity analyze every section in parallel, scoring and suggesting improvements." },
+              { step: "03", title: "GPT-4o Enhances", desc: "GPT-4o applies the highest-rated improvements, then runs ATS scoring with Claude. Pick a template and download." },
             ].map((item) => (
               <div key={item.step} className="p-5 rounded-2xl bg-white/[0.03] border border-white/8">
                 <div className="text-3xl font-bold text-primary/30 mb-3">{item.step}</div>
